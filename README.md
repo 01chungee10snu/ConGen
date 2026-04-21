@@ -1,352 +1,112 @@
-# ConGen
+# 🎬 ConGen Pro: AI 교육 영상 자율 제작 프레임워크
 
-ConGen은 자연어 주제를 입력받아 교육용 영상을 자동 생성하는 Python 기반 파이프라인입니다. 현재 저장소에 구현된 흐름은 다음과 같습니다.
+**ConGen Pro**는 자연어 프롬프트 단 한 줄로 기획부터 대본 작성, 이미지 시각화, 음성 더빙, AI 비디오 모션, 그리고 배경음악(BGM) 믹싱까지 전 과정을 자율적으로 수행하는 **교육용 영상 제작 시스템**입니다.
 
-1. Gemini로 장면별 스크립트 생성
-2. Gemini 이미지 모델로 장면 이미지 생성
-3. Gemini TTS로 장면별 내레이션 WAV 생성
-4. Veo로 장면 비디오 생성, 또는 FFmpeg 정적 비디오 생성
-5. FFmpeg로 최종 영상 병합
+최신 구글 멀티모달 생태계(Gemini 3.1, Veo 3.1, Nano Banana, Lyria)를 완벽하게 오케스트레이션하여, 비용 효율적이면서도 전문적인 결과물을 만들어냅니다.
 
-이 README는 현재 코드 기준으로 작성되었습니다. 상위 문서인 `IMPLEMENTATION_PLAN.md`, `교육 영상 제작 자동화 프레임워크 아이디어.md`에는 장기 계획과 아이디어가 포함되어 있으며, 그 내용이 모두 코드에 구현된 것은 아닙니다.
+---
 
-## 현재 구현 범위
+## ✨ 주요 기능 (Key Features)
 
-- 스크립트 생성: `congen/agents/script_generator.py`
-- 이미지 생성: `congen/agents/image_generator.py`
-- 음성 생성: `congen/agents/audio_generator.py`
-- 비디오 생성: `congen/agents/video_generator.py`
-- 전체 오케스트레이션: `congen/pipeline.py`
+*   **전문가용 스토리보드 대시보드:** 직관적인 웹 UI(Streamlit)를 통해 장면별로 대사, 이미지, 영상을 미리보고 세밀하게 조율할 수 있습니다.
+*   **비용 효율적인 초안 가조립 (Draft Play):** 비싼 AI 비디오를 만들기 전, 이미지와 음성만 결합한 줌팬(Zoom-pan) 영상으로 타이밍을 무료로 점검합니다.
+*   **업계 최고 수준의 AI 모델 통합:**
+    *   **대본 & 기획:** Gemini 3.1 Pro
+    *   **이미지/슬라이드:** Nano Banana Pro (Gemini 3 Pro Image)
+    *   **음성 (TTS):** Gemini 3.1 Flash TTS
+    *   **비디오 모션:** Veo 3.1
+    *   **배경음악 (BGM):** Lyria 3 Pro
+*   **견고한 프로덕션 아키텍처:**
+    *   비동기 FFmpeg 렌더링으로 멈춤 없는 고속 병렬 처리.
+    *   파일 무결성 검증(0바이트 방지) 및 자동 자원 청소(Garbage Collection).
+    *   환각(Hallucination) 방지 프롬프팅 및 오디오 팝 노이즈 제거(Fade) 적용.
 
-현재 코드에서 실제로 사용하는 오디오 엔진은 ElevenLabs가 아니라 Google Gemini TTS입니다. 일부 로그 문자열과 기존 문서에 ElevenLabs라는 표현이 남아 있지만, 구현 기준으로는 Google API만으로 오디오를 생성합니다.
+---
 
-## 저장소 구조
+## 🛠️ 사전 준비사항 (Prerequisites)
 
-```text
-ConGen/
-├─ main.py
-├─ resume.py
-├─ run_audio_generation.py
-├─ run_video_generation.py
-├─ run_assembly.py
-├─ force_assembly.py
-├─ run_santa_video.py
-├─ congen/
-│  ├─ agents/
-│  ├─ config/
-│  │  └─ prompts/
-│  ├─ models/
-│  └─ pipeline.py
-├─ check/
-├─ test/
-├─ assets/
-├─ output/
-└─ temp/
+ConGen Pro를 실행하기 위해 컴퓨터에 다음 환경이 준비되어 있어야 합니다.
+
+1.  **Python 3.10 이상** 설치
+2.  **FFmpeg 설치 및 PATH 등록** (매우 중요)
+    *   터미널에서 `ffmpeg -version` 및 `ffprobe -version` 입력 시 정상적으로 버전 정보가 출력되어야 합니다.
+3.  **Google AI Studio API Key 발급**
+    *   [Google AI Studio](https://aistudio.google.com/)에 접속하여 무료 API 키를 발급받으세요.
+
+---
+
+## 🚀 설치 및 설정 (Installation & Setup)
+
+**1. 저장소 클론 및 디렉토리 이동**
+```bash
+git clone https://github.com/01chungee10snu/ConGen.git
+cd ConGen
 ```
 
-## 사전 준비사항
-
-### 1. 시스템 요구사항
-
-- Python 3.10 이상 권장
-- `ffmpeg`와 `ffprobe`가 설치되어 있고 PATH에 등록되어 있어야 함
-- PowerShell 또는 일반 셸에서 `python`, `ffmpeg`, `ffprobe` 명령이 실행 가능해야 함
-
-확인 예시:
-
-```powershell
-python --version
-ffmpeg -version
-ffprobe -version
-```
-
-### 2. Google API 준비
-
-이 저장소는 `google-genai` SDK를 통해 Google 모델을 직접 호출합니다. 최소한 `GOOGLE_API_KEY`가 필요합니다.
-
-- 필수: `GOOGLE_API_KEY`
-- 선택: `GOOGLE_CLOUD_PROJECT`
-- 선택: `VEO_STRATEGY`
-
-현재 코드 기준 모델 사용처:
-
-- 스크립트: `gemini-3-pro-preview`
-- 이미지: `gemini-3-pro-image-preview`
-- TTS: `gemini-2.5-flash-preview-tts`
-- 비디오: `veo-3.1-fast-generate-preview`
-
-준비 순서:
-
-1. Google AI Studio 또는 현재 계정이 사용하는 Google GenAI 환경에서 API 키를 발급합니다.
-2. 발급한 키가 텍스트, 이미지, TTS 모델 호출에 사용 가능한지 확인합니다.
-3. Veo 모델을 쓸 예정이면 해당 계정에 비디오 생성 권한과 할당량이 있는지 확인합니다.
-4. Veo 접근이 없거나 비용을 줄이고 싶다면 `VEO_STRATEGY=none`으로 설정합니다.
-
-주의:
-
-- `VEO_STRATEGY=none`이면 Veo 대신 FFmpeg로 정적 비디오를 만들어 전체 파이프라인을 끝까지 실행할 수 있습니다.
-- `VEO_STRATEGY`의 주석에는 `full`, `hybrid`, `minimal`, `none`이 적혀 있지만, 현재 코드에서 분기 구현이 명확한 값은 사실상 `none`과 그 외 값뿐입니다.
-- `GOOGLE_CLOUD_PROJECT`는 설정 클래스에서 받지만 현재 구현에서는 직접 사용하지 않습니다.
-
-### 3. 환경 변수 파일 준비
-
-프로젝트 루트에 `.env` 파일을 만듭니다.
-
-```env
-GOOGLE_API_KEY=your_google_api_key
-
-# 선택 사항
-GOOGLE_CLOUD_PROJECT=your_project_id
-
-# full: Veo 사용, none: FFmpeg 정적 비디오 사용
-VEO_STRATEGY=none
-
-# 현재 코드에서는 사용하지 않음
-# ELEVENLABS_API_KEY=
-```
-
-보안 주의:
-
-- 실제 API 키가 들어있는 `.env`는 커밋하지 않는 것을 권장합니다.
-- 기존 `.env`가 있다면 새 키를 덮어쓰기 전에 백업 여부를 확인하세요.
-
-## 의존성
-
-### Python 패키지
-
-현재 코드 import 기준 필수 패키지:
-
-- `google-genai`
-- `pydantic`
-- `pydantic-settings`
-- `python-dotenv`
-- `tenacity`
-
-선택 패키지:
-
-- `Pillow`
-  - `congen/agents/video_generator.py`의 단독 테스트 블록에서만 사용
-  - 전체 파이프라인 실행에는 필수 아님
-
-### 외부 도구
-
-- `ffmpeg`
-- `ffprobe`
-
-## 설치 방법
-
-PowerShell 기준 예시입니다.
-
-```powershell
+**2. 가상 환경 생성 및 활성화 (선택 사항이지만 권장)**
+```bash
+# Windows
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install google-genai pydantic pydantic-settings python-dotenv tenacity Pillow
+.\.venv\Scripts\activate
+
+# macOS / Linux
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-그 다음 프로젝트 루트에 `.env`를 작성합니다.
-
-## 실행 전 점검
-
-저장소에는 간단한 점검 스크립트가 포함되어 있습니다.
-
-```powershell
-python .\check\20251212114500_setup_check.py
-python .\check\20251212113602_model_list_check.py
-python .\check\20251212113600_api_access_check.py
+**3. 필수 라이브러리 설치**
+```bash
+pip install --upgrade pip
+pip install streamlit google-genai pydantic pydantic-settings python-dotenv tenacity Pillow
 ```
 
-용도:
-
-- `setup_check.py`: 설정 로드와 기본 import 확인
-- `model_list_check.py`: 계정에서 보이는 모델 목록 확인
-- `api_access_check.py`: 텍스트, 이미지, 비디오 호출 가능 여부 점검
-
-Veo 권한이나 할당량만 따로 보고 싶다면:
-
-```powershell
-python .\test\check_veo_quota.py
+**4. 환경 변수 설정 (.env)**
+프로젝트 루트 폴더에 `.env` 파일을 생성하고 발급받은 API 키를 입력합니다.
+*(또는 앱을 실행한 후 웹 브라우저 화면의 사이드바에서 직접 입력할 수도 있습니다.)*
+```env
+GOOGLE_API_KEY=여러분의_API_키를_여기에_입력하세요
 ```
 
-## 사용 방법
+---
 
-### 1. 전체 파이프라인 실행
+## 🎮 사용 방법 (How to Use)
 
-현재 `main.py`는 CLI 인자를 받지 않고, 파일 내부의 `topic` 문자열을 직접 수정해서 사용합니다.
+모든 준비가 끝났습니다! 아래 명령어를 입력하여 **ConGen Director** 웹 앱을 실행합니다.
 
-```powershell
-python .\main.py
+```bash
+streamlit run streamlit_app.py
 ```
 
-실행 흐름:
+명령어를 실행하면 웹 브라우저가 열리며 전문적인 픽셀 아트 테마의 대시보드가 나타납니다.
 
-1. `output/YYYYMMDD_HHMMSS_<topic>/` 디렉터리 생성
-2. `1_script.json` 저장
-3. `2_scenes/`에 이미지 생성
-4. `3_audio/`에 WAV 생성
-5. `4_videos/`에 MP4 생성
-6. `final_video.mp4` 생성
+### 🎬 단계별 워크플로우
 
-### 2. 출력 결과 구조
+1.  **초기 설정 (사이드바)**
+    *   사이드바에서 **'API 상태 점검'** 버튼을 눌러 내 API 키가 정상인지, Veo 등 비디오 모델 권한이 있는지 확인합니다.
+    *   **디테일 프롬프팅 제어**를 열어 영상의 화풍(예: 3D Render)이나 카메라 워크를 취향껏 설정합니다.
+2.  **영상 기획 (Draft)**
+    *   "중학생을 위한 블랙홀의 원리 (3개 장면)"처럼 원하는 주제를 입력하고 스크립트 생성을 시작합니다.
+3.  **스토리보드 프로덕션 (Production)**
+    *   **타임라인 뷰:** 각 장면별로 어떤 자산이 만들어졌는지 진행도를 확인합니다.
+    *   **음성 & 이미지 생성:** 각 장면 카드를 열어 내레이션을 듣고, 이미지를 생성해 봅니다. 맘에 들지 않으면 텍스트를 고치고 다시 만들 수 있습니다.
+    *   **초안 조립 (비용 $0):** 음성과 이미지가 준비되면 '초안 조립'을 눌러 타이밍이 맞는지 미리보기 영상을 확인합니다.
+    *   **AI 비디오 생성:** 초안이 맘에 들면 '✨ 고품질 AI 비디오(Veo)' 버튼을 눌러 영상에 생명력을 불어넣습니다.
+4.  **최종 마스터링 (Final Assembly)**
+    *   모든 장면의 렌더링이 완료되면 맨 아래의 **'마스터링'** 버튼을 누릅니다.
+    *   시스템이 자동으로 전체 길이를 계산하여 **Lyria BGM을 생성하고 부드럽게 믹싱**하여 최종 MP4 파일을 완성합니다. 다운로드하여 확인하세요!
 
-```text
-output/
-└─ 20251216_165148_ConGen_프로젝트_소개_교육_영상을_자동으로_생성하/
-   ├─ 1_script.json
-   ├─ 2_scenes/
-   │  ├─ scene_001.png
-   │  └─ ...
-   ├─ 3_audio/
-   │  ├─ scene_001.wav
-   │  └─ ...
-   ├─ 4_videos/
-   │  ├─ scene_001.mp4
-   │  └─ ...
-   ├─ temp/
-   └─ final_video.mp4
-```
+---
 
-### 3. 실패 후 이어서 실행
+## 🚨 자주 묻는 질문 (Troubleshooting)
 
-최근 생성된 `output` 폴더를 기준으로 재개합니다.
+**Q. `ffmpeg`를 찾을 수 없다는 오류가 납니다.**
+A. 운영체제에 FFmpeg가 설치되지 않았거나 시스템 환경 변수(PATH)에 등록되지 않았습니다. FFmpeg를 설치한 후 터미널을 완전히 껐다가 다시 켜주세요.
 
-```powershell
-python .\resume.py
-```
+**Q. API 상태 점검에서 'Leaked' 또는 'Permission Denied'가 뜹니다.**
+A. GitHub 등 공개된 곳에 API 키가 포함된 파일(`.env` 등)이 올라가 구글이 키를 차단한 것입니다. AI Studio에서 기존 키를 삭제하고 새 키를 발급받아 교체하세요.
 
-현재 `resume.py`는 다음만 수행합니다.
+**Q. 비디오(Veo) 생성이 계속 실패합니다.**
+A. 현재 계정에 Veo 모델 접근 권한이 없거나 할당량(Quota)을 초과했을 수 있습니다. 사이드바의 API 점검을 통해 권한을 확인하세요. 권한이 없다면 '초안 조립' 영상만으로도 훌륭한 영상을 렌더링할 수 있습니다.
 
-- 기존 `1_script.json` 로드
-- 비디오 생성 재시도
-- 최종 합성 재시도
-
-즉, 오디오가 아직 없는 상태라면 먼저 `run_audio_generation.py`를 실행해야 합니다.
-
-### 4. 오디오만 다시 생성
-
-```powershell
-python .\run_audio_generation.py
-```
-
-동작:
-
-- 가장 최근 `output` 폴더 탐색
-- `1_script.json`에서 narration 읽기
-- `3_audio/`에 WAV 생성
-
-주의:
-
-- 파일 안의 출력 메시지에는 `ElevenLabs`라고 적혀 있지만, 실제 호출은 `AudioGeneratorAgent`의 Gemini TTS입니다.
-
-### 5. 비디오 생성만 다시 실행
-
-```powershell
-python .\run_video_generation.py
-```
-
-실제 동작은 `resume.py`와 거의 동일합니다. 즉, 최신 결과 폴더에서 비디오 생성과 최종 합성까지 다시 시도합니다.
-
-### 6. 최종 합성만 다시 실행
-
-```powershell
-python .\run_assembly.py
-```
-
-주의:
-
-- 현재 `run_assembly.py`는 `scene_001`부터 `scene_005`까지만 순회하도록 작성되어 있습니다.
-- 씬이 6개 이상인 프로젝트에서는 전체 씬을 다 합치지 못할 수 있습니다.
-- 전체 씬 기준으로 다시 합치려면 `resume.py` 경로를 쓰거나 `force_assembly.py`를 수정해서 사용하는 편이 안전합니다.
-
-### 7. 특정 output 폴더 강제 합성
-
-```powershell
-python .\force_assembly.py
-```
-
-실행 전에 파일 안의 `target_dir_name` 값을 원하는 폴더명으로 수정해야 합니다.
-
-### 8. 샘플 프로젝트 실행
-
-`run_santa_video.py`는 `santa/` 폴더의 이미지를 사용해 별도 시나리오를 구성하는 예제 스크립트입니다.
-
-```powershell
-python .\run_santa_video.py
-```
-
-## 주요 설정
-
-핵심 설정은 `congen/config/settings.py`에서 관리합니다.
-
-자주 보는 항목:
-
-- `GOOGLE_API_KEY`
-- `GOOGLE_CLOUD_PROJECT`
-- `MODEL_GEMINI_PRO`
-- `MODEL_IMAGEN`
-- `MODEL_VEO`
-- `VEO_STRATEGY`
-- `OUTPUT_DIR`
-- `TEMP_DIR`
-- `ASSETS_DIR`
-
-실무적으로 가장 중요한 값은 `VEO_STRATEGY`입니다.
-
-- `full`
-  - 기본값
-  - Veo 비디오 생성을 시도
-  - 실패 시 정적 비디오로 폴백
-- `none`
-  - Veo를 건너뛰고 FFmpeg로 정적 비디오 생성
-  - API 권한이 부족하거나 비용을 줄이고 싶을 때 유용
-
-## Google API 준비 방법 상세
-
-추천 절차는 다음과 같습니다.
-
-1. Google AI Studio에서 API 키를 발급합니다.
-2. `.env`에 `GOOGLE_API_KEY`를 설정합니다.
-3. `python .\check\20251212113602_model_list_check.py`로 계정에서 보이는 모델 목록을 확인합니다.
-4. `python .\check\20251212113600_api_access_check.py`로 실제 호출 가능 여부를 확인합니다.
-5. Veo가 막혀 있으면 우선 `VEO_STRATEGY=none`으로 개발과 파이프라인 검증을 진행합니다.
-6. Veo 접근이 필요해지면 계정 권한, 미리보기 접근 여부, 할당량 상태를 다시 점검합니다.
-
-이 프로젝트는 현재 Vertex AI 전용 인증 흐름이 아니라 API 키 기반 호출에 맞춰져 있습니다.
-
-## 자주 발생하는 문제
-
-### `GOOGLE_API_KEY is not set`
-
-- `.env` 파일이 프로젝트 루트에 있는지 확인
-- `GOOGLE_API_KEY=...` 형식으로 들어있는지 확인
-- 가상환경을 바꿨다면 다시 실행
-
-### `ffmpeg` 또는 `ffprobe`를 찾을 수 없음
-
-- FFmpeg를 설치하고 PATH에 추가
-- 새 셸을 열어서 `ffmpeg -version`, `ffprobe -version` 재확인
-
-### 이미지 또는 비디오 모델 호출 실패
-
-- 계정에 해당 모델 권한이 없는 경우가 많음
-- 먼저 점검 스크립트로 접근 가능 여부 확인
-- 개발 중에는 `VEO_STRATEGY=none`으로 우회 가능
-
-### 중간 실패 후 다시 돌리고 싶음
-
-일반적인 복구 순서:
-
-1. 오디오가 없으면 `python .\run_audio_generation.py`
-2. 비디오와 최종 합성은 `python .\resume.py`
-
-### 로그상 ElevenLabs가 보임
-
-- 현재 구현은 Google Gemini TTS를 사용
-- 로그 문구가 오래된 상태일 뿐 실제 의존성은 Google 쪽입니다
-
-## 참고 문서
-
-- `IMPLEMENTATION_PLAN.md`: 장기 구현 계획과 아키텍처 초안
-- `교육 영상 제작 자동화 프레임워크 아이디어.md`: 조사/아이디어 문서
-- `check/`: API 및 모델 접근 점검용 스크립트
-- `test/`: 단일 기능 테스트 및 실험 스크립트
+---
+*Built with ❤️ using Google Gemini & Streamlit*
