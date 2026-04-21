@@ -51,8 +51,12 @@ class VideoGeneratorAgent(BaseAgent):
         # Image 객체 생성
         image = types.Image(image_bytes=image_bytes, mime_type="image/png")
         
-        # 프롬프트 보강
-        full_prompt = f"Cinematic, high quality, 4k. {prompt}"
+        # 프롬프트 보강 (Text Preservation 지침 추가)
+        full_prompt = (
+            f"Cinematic, high quality, 4k. {prompt}. "
+            f"CRITICAL INSTRUCTION: Strictly preserve any text, letters, or numbers visible in the input image. "
+            f"Do NOT morph, distort, translate, or animate the text. The text must remain perfectly legible and static throughout the video."
+        )
         
         # 비디오 생성 요청
         return self.client.models.generate_videos(
