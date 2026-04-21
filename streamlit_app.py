@@ -191,6 +191,30 @@ with st.sidebar:
                     st.error(f"연결 실패: {e}")
                     status.update(label="API 점검 실패", state="error")
 
+    # 3. 디테일 프롬프팅 제어
+    st.subheader("🎛️ 디테일 프롬프팅 제어")
+    with st.expander("상세 설정 (Advanced)"):
+        st.markdown("**🎨 이미지 설정**")
+        img_style = st.selectbox("화풍 (Style)", ["Modern Educational Illustration", "3D Render", "Flat Design", "Photorealistic", "Anime"], index=0)
+        img_color = st.selectbox("색감 (Color)", ["Vibrant", "Pastel", "Monochrome", "Cyberpunk"], index=0)
+        img_custom = st.text_input("자연어 추가 지침 (Image)", placeholder="예: 배경을 어둡게 처리해주세요")
+        
+        st.markdown("**🎞️ 비디오 모션 설정**")
+        vid_camera = st.selectbox("카메라 워크", ["Cinematic Pan", "Slow Zoom In", "Static", "Tilt Up"], index=0)
+        vid_custom = st.text_input("자연어 추가 지침 (Video)", placeholder="예: 빛이 서서히 밝아지도록 연출해주세요")
+        
+        st.markdown("**🎵 배경음악 설정**")
+        mus_genre = st.selectbox("장르 (Genre)", ["Instrumental", "Lo-Fi", "Orchestral", "Electronic"], index=0)
+        mus_mood = st.selectbox("무드 (Mood)", ["Engaging", "Calm", "Uplifting", "Mysterious"], index=0)
+        mus_custom = st.text_input("자연어 추가 지침 (Music)", placeholder="예: 피아노 선율을 강조해주세요")
+
+    # 추출한 설정값들을 global_options 딕셔너리로 묶음
+    st.session_state.global_options = {
+        "image": {"style": img_style, "color": img_color, "custom": img_custom},
+        "video": {"camera": vid_camera, "custom": vid_custom},
+        "music": {"genre": mus_genre, "mood": mus_mood, "custom": mus_custom}
+    }
+
     st.markdown("---")
     if st.button("🔄 새 프로젝트 시작", use_container_width=True):
         reset_all()
@@ -321,7 +345,10 @@ elif st.session_state.step == "production":
                 img_path = st.session_state.output_dir / "2_scenes" / f"scene_{scene_id:03d}.png"
                 if st.button(f"이미지 생성/미리보기", key=f"btn_img_{scene_id}"):
                     with st.spinner("그리는 중..."):
-                        enhanced_prompt = f"Educational illustration, high quality, 4k, {scene.visual.description}"
+                        opts = st.session_state.global_options["image"]
+                        enhanced_prompt = f"{scene.visual.description}. Style: {opts['style']}, Color Palette: {opts['color']}."
+                        if opts['custom']: enhanced_prompt += f" Extra: {opts['custom']}"
+                        enhanced_prompt += " Educational illustration, high quality, 4k."
                         asyncio.run(st.session_state.pipeline.image_agent.run(enhanced_prompt, img_path))
                         st.rerun()
                 
@@ -336,7 +363,8 @@ elif st.session_state.step == "production":
                 draft_path = st.session_state.output_dir / "temp" / f"draft_{scene_id:03d}.mp4"
                 if st.button(f"초안 조립 (비용 $0)", key=f"btn_draft_{scene_id}", disabled=not (audio_path.exists() and img_path.exists())):
                     with st.spinner("레이어 병합 중..."):
-                        st.session_state.pipeline._create_static_video(img_path, audio_path, draft_path)
+                        # 비동기 함수이므로 asyncio.run 사용
+                        asyncio.run(st.session_state.pipeline._create_static_video(img_path, audio_path, draft_path))
                         st.rerun()
                 
                 if draft_path.exists():
@@ -346,7 +374,10 @@ elif st.session_state.step == "production":
                     video_path = st.session_state.output_dir / "4_videos" / f"scene_{scene_id:03d}.mp4"
                     if st.button(f"✨ 고품질 AI 비디오(Veo)", key=f"btn_veo_{scene_id}", type="secondary"):
                         with st.spinner("AI 모션 렌더링 중 (2~3분 소요)..."):
-                            asyncio.run(st.session_state.pipeline.video_agent.run(scene.visual.description, img_path, video_path))
+                            opts = st.session_state.global_options["video"]
+                            enhanced_prompt = f"{scene.visual.description}. Camera Motion: {opts['camera']}."
+                            if opts['custom']: enhanced_prompt += f" Extra: {opts['custom']}"
+                            asyncio.run(st.session_state.pipeline.video_agent.run(enhanced_prompt, img_path, video_path))
                             st.rerun()
                     
                     if video_path.exists():
@@ -372,7 +403,9 @@ elif st.session_state.step == "final":
     st.header("🎬 3. 최종 영상 렌더링")
     
     with st.spinner("모든 클립을 하나의 고화질 영상으로 조립하고 있습니다..."):
-        asyncio.run(st.session_state.pipeline._assemble_final_video(st.session_state.script, st.session_state.output_dir))
+        opts = st.session_state.global_options
+        asyncio.run(st.session_state.pipeline._assemble_final_video(st.session_state.script, st.session_state.output_dir, options=opts))
+
     
     final_video = st.session_state.output_dir / "final_video.mp4"
     if final_video.exists():
