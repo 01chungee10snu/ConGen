@@ -213,88 +213,153 @@ if st.session_state.step == "draft":
 
 # [단계 2] 스토리보드 대시보드 (핵심 UI)
 elif st.session_state.step == "production":
-    st.title("🎨 2. 스토리보드 & 프로덕션")
-    st.markdown("각 장면의 음성과 이미지를 확인하고, AI 비디오를 만들기 전 '초안 영상'으로 리듬을 체크하세요.")
+    st.title("🎨 2. 스토리보드 & 타임라인 프로덕션")
+    st.markdown("각 장면이 시간순으로 어떻게 쌓이는지(Layering) 확인하고 개별 자산을 조율하세요.")
 
     # 전체 요약 정보
     meta = st.session_state.script.metadata
     st.info(f"📌 **제목:** {meta.title} | **학습목표:** {meta.learning_objective}")
 
-    # 장면별 스토리보드 카드
+    # --- 타임라인 뷰 (Layering Visualization) ---
+    st.subheader("⏱️ 전체 타임라인 뷰")
+    
+    # CSS를 이용한 가로 스크롤 타임라인 컨테이너
+    st.markdown("""
+        <style>
+        .timeline-container {
+            display: flex;
+            overflow-x: auto;
+            padding-bottom: 20px;
+            gap: 15px;
+        }
+        .scene-card {
+            min-width: 300px;
+            background-color: #1A1A1A;
+            border: 2px solid #444444;
+            padding: 15px;
+            flex: 0 0 auto;
+        }
+        .layer-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        .layer-icon {
+            width: 30px;
+            text-align: center;
+            margin-right: 10px;
+        }
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-done { background-color: #00FF41; }
+        .status-wait { background-color: #555555; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    timeline_html = '<div class="timeline-container">'
+    for scene in st.session_state.script.scenes:
+        sid = scene.scene_id
+        out = st.session_state.output_dir
+        
+        # 자산 존재 여부 확인
+        has_aud = (out / "3_audio" / f"scene_{sid:03d}.wav").exists()
+        has_img = (out / "2_scenes" / f"scene_{sid:03d}.png").exists()
+        has_vid = (out / "4_videos" / f"scene_{sid:03d}.mp4").exists() or (out / "temp" / f"draft_{sid:03d}.mp4").exists()
+        
+        def layer_html(icon, name, is_done):
+            dot_class = "status-done" if is_done else "status-wait"
+            color = "#00FF41" if is_done else "#888888"
+            return f'<div class="layer-row"><span class="layer-icon">{icon}</span><span class="status-dot {dot_class}"></span><span style="color:{color}">{name}</span></div>'
+
+        card_html = f"""
+        <div class="scene-card">
+            <h4 style="margin-top:0; border-bottom: 1px solid #333; padding-bottom: 5px;">Scene {sid}</h4>
+            {layer_html("📝", "Script Layer", True)}
+            {layer_html("🔊", "Audio Layer", has_aud)}
+            {layer_html("🖼️", "Visual Layer", has_img)}
+            {layer_html("🎞️", "Motion Layer", has_vid)}
+        </div>
+        """
+        timeline_html += card_html
+    timeline_html += '</div>'
+    
+    st.markdown(timeline_html, unsafe_allow_html=True)
+    st.divider()
+
+    # --- 개별 장면 편집 (스토리보드) ---
+    st.subheader("🛠️ 레이어 상세 편집")
     for i, scene in enumerate(st.session_state.script.scenes):
         scene_id = scene.scene_id
-        with st.container(border=True):
-            st.subheader(f"🎬 Scene {scene_id}")
-            
+        with st.expander(f"🎬 Scene {scene_id} 상세 설정", expanded=(i==0)):
             # 3단 컬럼 구성: [텍스트/음성] | [이미지] | [미리보기/비디오]
             col_text, col_img, col_prev = st.columns([1.5, 1.2, 1.3])
             
             with col_text:
-                st.markdown("**🖋️ 스크립트 & 음성**")
+                st.markdown("**📝 스크립트 & 🔊 음성 레이어**")
                 scene.audio.narration = st.text_area("내레이션", scene.audio.narration, key=f"narr_{scene_id}", height=100)
                 
                 audio_path = st.session_state.output_dir / "3_audio" / f"scene_{scene_id:03d}.wav"
-                if st.button(f"🔊 음성 생성/미리듣기", key=f"btn_aud_{scene_id}"):
+                if st.button(f"음성 생성/미리듣기", key=f"btn_aud_{scene_id}"):
                     with st.spinner("생성 중..."):
                         asyncio.run(st.session_state.pipeline.audio_agent.run(scene.audio.narration, audio_path))
+                        st.rerun()
                 
                 if audio_path.exists():
                     st.audio(str(audio_path))
                     scene.audio_path = str(audio_path)
-                else:
-                    st.caption("음성이 아직 생성되지 않았습니다.")
 
             with col_img:
-                st.markdown("**🖼️ 이미지 생성**")
+                st.markdown("**🖼️ 시각 레이어 (이미지)**")
                 scene.visual.description = st.text_area("이미지 묘사", scene.visual.description, key=f"img_desc_{scene_id}", height=100)
                 
                 img_path = st.session_state.output_dir / "2_scenes" / f"scene_{scene_id:03d}.png"
-                if st.button(f"🎨 이미지 생성/미리보기", key=f"btn_img_{scene_id}"):
+                if st.button(f"이미지 생성/미리보기", key=f"btn_img_{scene_id}"):
                     with st.spinner("그리는 중..."):
                         enhanced_prompt = f"Educational illustration, high quality, 4k, {scene.visual.description}"
                         asyncio.run(st.session_state.pipeline.image_agent.run(enhanced_prompt, img_path))
+                        st.rerun()
                 
                 if img_path.exists():
                     st.image(str(img_path), use_container_width=True)
                     scene.image_path = str(img_path)
-                else:
-                    st.caption("이미지가 아직 생성되지 않았습니다.")
 
             with col_prev:
-                st.markdown("**📺 영상 미리보기 & AI Motion**")
+                st.markdown("**🎞️ 모션 레이어 (영상 & 결합)**")
                 
                 # 초안 영상 (Draft Video - Ken Burns) 생성 버튼
                 draft_path = st.session_state.output_dir / "temp" / f"draft_{scene_id:03d}.mp4"
-                if st.button(f"🎞️ 초안 영상(줌팬) 미리보기", key=f"btn_draft_{scene_id}", disabled=not (audio_path.exists() and img_path.exists())):
-                    with st.spinner("초안 조립 중..."):
-                        # FFmpeg 줌팬 효과 적용
+                if st.button(f"초안 조립 (비용 $0)", key=f"btn_draft_{scene_id}", disabled=not (audio_path.exists() and img_path.exists())):
+                    with st.spinner("레이어 병합 중..."):
                         st.session_state.pipeline._create_static_video(img_path, audio_path, draft_path)
+                        st.rerun()
                 
                 if draft_path.exists():
                     st.video(str(draft_path))
-                    st.caption("초안 영상 (비용 $0)")
                     
-                    # AI 비디오(Veo) 생성 버튼 - 신중한 선택 유도
+                    # AI 비디오(Veo) 생성 버튼
                     video_path = st.session_state.output_dir / "4_videos" / f"scene_{scene_id:03d}.mp4"
-                    if st.button(f"✨ AI 비디오 생성 (Veo)", key=f"btn_veo_{scene_id}", type="secondary"):
-                        with st.spinner("AI가 영상을 생성 중입니다 (약 2~3분 소요)..."):
+                    if st.button(f"✨ 고품질 AI 비디오(Veo)", key=f"btn_veo_{scene_id}", type="secondary"):
+                        with st.spinner("AI 모션 렌더링 중 (2~3분 소요)..."):
                             asyncio.run(st.session_state.pipeline.video_agent.run(scene.visual.description, img_path, video_path))
+                            st.rerun()
                     
                     if video_path.exists():
-                        st.video(str(video_path))
-                        st.success("AI 비디오 완료!")
+                        st.success("고품질 렌더링 완료!")
                         scene.video_path = str(video_path)
                     else:
-                        # AI 비디오가 없으면 초안 영상을 최종 소스로 사용하도록 설정
                         scene.video_path = str(draft_path)
-                else:
-                    st.warning("음성과 이미지가 준비되면 미리보기가 가능합니다.")
 
     # 전체 조립 단계로 이동
     st.divider()
     col_left, col_right = st.columns([1, 1])
     with col_right:
-        if st.button("모든 장면 확정 및 최종 영상 조립 ➡️", type="primary", use_container_width=True):
+        if st.button("모든 장면 타임라인 확정 및 마스터링 ➡️", type="primary", use_container_width=True):
             # 스크립트 최종본 저장
             script_path = st.session_state.output_dir / "1_script.json"
             with open(script_path, "w", encoding="utf-8") as f:
