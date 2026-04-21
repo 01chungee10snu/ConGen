@@ -346,7 +346,11 @@ class VideoGenerationPipeline:
                 "-i", str(scene_data["video"]), "-i", str(scene_data["audio"]),
                 "-filter_complex", f"[1:a]{audio_filter}[a]",
                 "-map", "0:v:0", "-map", "[a]",
-                "-c:v", "libx264", "-c:a", "aac",
+                "-c:v", "libx264", 
+                "-pix_fmt", "yuv420p",                # 픽셀 포맷 강제 통일 (8비트)
+                "-r", str(settings.VIDEO_FPS),        # 프레임 레이트 고정 강제
+                "-video_track_timescale", "90000",    # Timebase 정규화
+                "-c:a", "aac", "-ar", "48000", "-ac", "2", # 오디오 샘플레이트/채널 정규화
                 "-t", f"{duration:.2f}", "-shortest", str(merged_path)
             ]
             proc = await asyncio.create_subprocess_exec(
