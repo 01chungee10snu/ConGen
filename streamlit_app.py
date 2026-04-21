@@ -391,12 +391,25 @@ elif st.session_state.step == "production":
     col_left, col_right = st.columns([1, 1])
     with col_right:
         if st.button("모든 장면 타임라인 확정 및 마스터링 ➡️", type="primary", use_container_width=True):
-            # 스크립트 최종본 저장
-            script_path = st.session_state.output_dir / "1_script.json"
-            with open(script_path, "w", encoding="utf-8") as f:
-                f.write(json.dumps(st.session_state.script.model_dump(), indent=2, ensure_ascii=False))
-            st.session_state.step = "final"
-            st.rerun()
+            # QA Fix: 누락된 씬 검증 (Missing Scene Alert)
+            missing_assets = []
+            for scene in st.session_state.script.scenes:
+                sid = scene.scene_id
+                out = st.session_state.output_dir
+                has_aud = (out / "3_audio" / f"scene_{sid:03d}.wav").exists()
+                has_vid = (out / "4_videos" / f"scene_{sid:03d}.mp4").exists() or (out / "temp" / f"draft_{sid:03d}.mp4").exists()
+                if not (has_aud and has_vid):
+                    missing_assets.append(sid)
+            
+            if missing_assets:
+                st.error(f"🚨 오류: 다음 씬의 모션 레이어 또는 음성 레이어가 생성되지 않았습니다: {missing_assets}\n해당 씬의 [초안 조립] 또는 [비디오 생성]을 먼저 완료해주세요.")
+            else:
+                # 스크립트 최종본 저장
+                script_path = st.session_state.output_dir / "1_script.json"
+                with open(script_path, "w", encoding="utf-8") as f:
+                    f.write(json.dumps(st.session_state.script.model_dump(), indent=2, ensure_ascii=False))
+                st.session_state.step = "final"
+                st.rerun()
 
 # [단계 3] 최종 조립 및 배포
 elif st.session_state.step == "final":

@@ -134,6 +134,9 @@ class VideoGenerationPipeline:
 
     async def _create_static_video(self, image_path: Path, audio_path: Optional[Path], output_path: Path):
         """이미지를 사용하여 줌/팬 효과가 있는 비디오 생성 (비동기 FFmpeg)"""
+        # 부모 디렉토리가 삭제되었을 수 있으므로 항상 생성 보장 (QA Fix)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
         duration = 5.0
         if audio_path and audio_path.exists():
             duration = await get_media_duration(audio_path)
