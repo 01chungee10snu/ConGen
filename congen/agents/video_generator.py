@@ -41,7 +41,8 @@ class VideoGeneratorAgent(BaseAgent):
     )
     def _call_veo(self, prompt: str, image_path: Path):
         """Veo API 호출 (Image-to-Video)"""
-        logger.info(f"Calling Veo API with model: {self.model_name}")
+        model_name = settings.MODEL_VEO
+        logger.info(f"Calling Veo API with model: {model_name}")
         
         # 이미지 파일 읽기
         with open(image_path, "rb") as f:
@@ -55,7 +56,7 @@ class VideoGeneratorAgent(BaseAgent):
         
         # 비디오 생성 요청
         return self.client.models.generate_videos(
-            model=self.model_name,
+            model=model_name,
             prompt=full_prompt,
             image=image, 
             config=types.GenerateVideosConfig(

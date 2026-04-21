@@ -46,7 +46,8 @@ class ImageGeneratorAgent(BaseAgent):
     )
     def _call_nano_banana(self, prompt: str):
         """Nano Banana Pro 호출 (generate_content 사용)"""
-        logger.info(f"Calling Nano Banana Pro with model: {self.model_name}")
+        model_name = settings.MODEL_IMAGEN
+        logger.info(f"Calling Image Gen with model: {model_name}")
         
         # 프롬프트 보강 (Global Rule 적용)
         full_prompt = (
@@ -57,11 +58,8 @@ class ImageGeneratorAgent(BaseAgent):
         )
         
         return self.client.models.generate_content(
-            model=self.model_name,
+            model=model_name,
             contents=full_prompt,
-            # config=types.GenerateContentConfig(
-            #     # 필요한 경우 설정 추가
-            # )
         )
 
     async def run(self, prompt: str, output_path: Path) -> str:

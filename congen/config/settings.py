@@ -12,18 +12,33 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
     
-    # --- Model IDs (검증된 모델 ID 사용) ---
-    # 텍스트/스크립트 생성
-    MODEL_GEMINI_PRO: str = "gemini-3-pro-preview"
-    MODEL_GEMINI_FLASH: str = "gemini-2.0-flash-exp"  # 폴백용
+    # --- Model Lists (Latest & Legacy) ---
+    TEXT_MODELS: dict = {
+        "Gemini 3.1 Pro (Latest)": "gemini-3.1-pro-preview",
+        "Gemini 3.1 Flash (Fast)": "gemini-3.1-flash-preview",
+        "Gemini 3.1 Flash-Lite (Cost-efficient)": "gemini-3.1-flash-lite-preview",
+        "Gemini 2.5 Pro (Stable)": "gemini-2.5-pro",
+        "Gemini 2.5 Flash (Legacy)": "gemini-2.5-flash",
+    }
     
-    # 이미지 생성
-    MODEL_IMAGEN: str = "gemini-3-pro-image-preview" # Nano Banana Pro
-    MODEL_IMAGEN_FALLBACK: str = "imagen-4.0-ultra-generate-001"
+    IMAGE_MODELS: dict = {
+        "Imagen 4 Ultra (High fidelity)": "imagen-4.0-ultra-generate-001",
+        "Imagen 4 (Standard)": "imagen-4.0-generate-001",
+        "Nano Banana 2 (Gemini 3.1 Flash Image)": "gemini-3.1-flash-image-preview",
+        "Nano Banana Pro (Gemini 3 Pro Image)": "gemini-3-pro-image-preview",
+        "Nano Banana (Gemini 2.5 Flash Image)": "gemini-2.5-flash-image",
+    }
     
-    # 비디오 생성
-    MODEL_VEO: str = "veo-3.1-fast-generate-preview"
-    MODEL_VEO_FAST: str = "veo-3.1-fast-generate-preview"
+    VIDEO_MODELS: dict = {
+        "Veo 3.1 Standard (Highest quality)": "veo-3.1-generate-preview",
+        "Veo 3.1 Fast (Low latency)": "veo-3.1-fast-generate-preview",
+        "Veo 3.1 Lite (Lowest cost)": "veo-3.1-lite-generate-preview",
+    }
+
+    # --- Active Model IDs ---
+    MODEL_GEMINI_PRO: str = "gemini-3.1-pro-preview"
+    MODEL_IMAGEN: str = "imagen-4.0-ultra-generate-001"
+    MODEL_VEO: str = "veo-3.1-generate-preview"
     
     # --- Paths ---
     BASE_DIR: Path = BASE_DIR

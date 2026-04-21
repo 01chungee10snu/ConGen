@@ -53,9 +53,11 @@ class ScriptGeneratorAgent(BaseAgent):
     )
     def _call_gemini(self, full_prompt: str):
         """Gemini API 호출 (재시도 로직 적용)"""
-        logger.info(f"Calling Gemini API with model: {self.model_name}")
+        # settings에서 최신 모델명을 동적으로 가져옴
+        model_name = settings.MODEL_GEMINI_PRO
+        logger.info(f"Calling Gemini API with model: {model_name}")
         return self.client.models.generate_content(
-            model=self.model_name,
+            model=model_name,
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

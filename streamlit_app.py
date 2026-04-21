@@ -56,6 +56,87 @@ with st.sidebar:
         st.write(f"{status} {step_name}")
     
     st.divider()
+    
+    # 모델 선택 섹션
+    st.subheader("🤖 모델 선택")
+    with st.expander("모델 상세 설정"):
+        selected_text_label = st.selectbox(
+            "스크립트 생성 모델",
+            options=list(settings.TEXT_MODELS.keys()),
+            index=0,
+            help="교육 설계 및 스크립트 작성을 담당하는 LLM입니다."
+        )
+        settings.MODEL_GEMINI_PRO = settings.TEXT_MODELS[selected_text_label]
+        
+        selected_image_label = st.selectbox(
+            "이미지 생성 모델",
+            options=list(settings.IMAGE_MODELS.keys()),
+            index=0,
+            help="장면별 일러스트 및 슬라이드를 생성합니다."
+        )
+        settings.MODEL_IMAGEN = settings.IMAGE_MODELS[selected_image_label]
+        
+        selected_video_label = st.selectbox(
+            "비디오 생성 모델",
+            options=list(settings.VIDEO_MODELS.keys()),
+            index=0,
+            help="이미지에 생동감을 불어넣는 AI 비디오 모델입니다."
+        )
+        settings.MODEL_VEO = settings.VIDEO_MODELS[selected_video_label]
+
+    st.divider()
+    
+    # 비디오 생성 전략
+    video_strategy = st.selectbox(
+        "비디오 생성 전략",
+        options=["none", "hybrid", "full"],
+        index=0,
+        help="none: 이미지+줌팬 효과 (가장 저렴), hybrid: 일부 씬만 AI 비디오, full: 모든 씬 AI 비디오 (고비용)"
+    )
+    settings.VEO_STRATEGY = video_strategy
+
+    st.divider()
+
+    if st.button("🔍 API 상태 점검", use_container_width=True):
+        if not user_api_key:
+            st.error("API 키를 먼저 입력해주세요.")
+        else:
+            with st.status("API 연결 및 모델 권한 확인 중...") as status:
+                from google import genai
+                try:
+                    temp_client = genai.Client(api_key=user_api_key)
+                    
+                    # 1. 텍스트 (Gemini)
+                    try:
+                        # 2.0-flash-exp가 안 될 수 있으므로 1.5-flash도 고려하여 리스트에서 확인
+                        models = temp_client.models.list()
+                        model_names = [m.name for m in models]
+                        
+                        if any("gemini" in name.lower() for name in model_names):
+                            st.success("✅ Gemini (Text/Script): OK")
+                        else:
+                            st.warning("⚠️ Gemini (Text): Not found in list")
+                    except Exception as e:
+                        st.error(f"❌ Gemini API: Error - {str(e)[:50]}...")
+                    
+                    # 2. 이미지 (Nano Banana)
+                    if any("gemini-3-pro-image" in name.lower() for name in model_names):
+                        st.success("✅ Nano Banana (Image): OK")
+                    else:
+                        st.warning("⚠️ Nano Banana (Image): Not found in list")
+                    
+                    # 3. 비디오 (Veo)
+                    if any("veo" in name.lower() for name in model_names):
+                        st.success("✅ Veo (Video): OK")
+                    else:
+                        st.warning("⚠️ Veo (Video): Not found in list")
+                        
+                    status.update(label="API 점검 완료", state="complete")
+                except Exception as e:
+                    st.error(f"연결 실패: {e}")
+                    status.update(label="API 점검 실패", state="error")
+
+    st.divider()
     if st.button("프로젝트 초기화", type="secondary"):
         reset_all()
 
