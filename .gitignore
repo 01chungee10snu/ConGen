@@ -1,0 +1,31 @@
+# 개인 설정 및 민감 정보
+.env
+*.env
+.vscode/
+.idea/
+
+# 생성된 결과물 및 임시 파일
+output/
+temp/
+santa/
+*.log
+pipeline.log
+video_gen.log
+
+# Python 관련
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# 테스트 결과물
+test/*.mp3
+test/*.wav
+test/*.mp4
