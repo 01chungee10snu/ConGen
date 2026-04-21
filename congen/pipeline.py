@@ -3,9 +3,12 @@ import asyncio
 import json
 import logging
 import subprocess
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+from PIL import Image, UnidentifiedImageError
 
 from congen.agents.script_generator import ScriptGeneratorAgent
 from congen.agents.image_generator import ImageGeneratorAgent
@@ -17,6 +20,18 @@ from congen.config.settings import settings
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+
+def is_valid_image(file_path: Path) -> bool:
+    """이미지 파일 무결성 검증"""
+    if not file_path.exists() or file_path.stat().st_size == 0:
+        return False
+    try:
+        with Image.open(file_path) as img:
+            img.verify()
+        return True
+    except (UnidentifiedImageError, IOError):
+        return False
 
 
 async def get_media_duration(file_path: Path) -> float:
@@ -38,6 +53,14 @@ async def get_media_duration(file_path: Path) -> float:
     return 0.0
 
 
+async def is_valid_media(file_path: Path) -> bool:
+    """오디오/비디오 파일 무결성 검증 (0바이트 및 재생 가능 여부)"""
+    if not file_path.exists() or file_path.stat().st_size == 0:
+        return False
+    duration = await get_media_duration(file_path)
+    return duration > 0.1
+
+
 class VideoGenerationPipeline:
     """
     교육 영상 제작을 위한 전체 파이프라인 관리자
@@ -50,6 +73,12 @@ class VideoGenerationPipeline:
         self.audio_agent = AudioGeneratorAgent()
         self.music_agent = MusicGeneratorAgent()
         
+        # 동시성 제어 (Rate Limiting)를 위한 세마포어
+        self.image_sem = asyncio.Semaphore(5)
+        self.audio_sem = asyncio.Semaphore(5)
+        self.video_sem = asyncio.Semaphore(2)  # Veo 모델은 더 엄격하게 제한
+
+        
     def _create_output_dir(self, topic: str) -> Path:
         """타임스탬프 기반 출력 디렉토리 생성"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -61,8 +90,8 @@ class VideoGenerationPipeline:
         return output_dir
 
     async def _generate_images(self, script: Script, output_dir: Path, options: dict = None):
-        """이미지 생성 (Nano Banana Pro) - 병렬 처리"""
-        logger.info("🎨 Step 2: Generating Images (Parallel)...")
+        """이미지 생성 (Nano Banana Pro) - 병렬 처리 (Semaphore 적용)"""
+        logger.info("🎨 Step 2: Generating Images (Parallel with Rate Limiting)...")
         images_dir = output_dir / "2_scenes"
         images_dir.mkdir(exist_ok=True)
         options = options or {}
@@ -73,11 +102,13 @@ class VideoGenerationPipeline:
         
         async def process_scene(scene):
             image_path = images_dir / f"scene_{scene.scene_id:03d}.png"
-            if image_path.exists():
+            if is_valid_image(image_path):
                 scene.image_path = str(image_path)
                 return
+            elif image_path.exists():
+                logger.warning(f"⚠️ Corrupted image found for Scene {scene.scene_id}. Regenerating...")
+                image_path.unlink()
 
-            # 업계 표준: 일관성 및 물리법칙 강제 프롬프트
             base_prompt = scene.visual.description
             enhanced_prompt = (
                 f"{base_prompt}. Style: {style}, Color Palette: {color}. "
@@ -88,9 +119,11 @@ class VideoGenerationPipeline:
                 enhanced_prompt += f" Additional instructions: {custom}"
 
             try:
-                await asyncio.sleep(scene.scene_id * 0.5)
-                saved_path = await self.image_agent.run(enhanced_prompt, image_path)
-                scene.image_path = str(saved_path)
+                # 세마포어로 동시성 제어
+                async with self.image_sem:
+                    await asyncio.sleep(0.5) # API 딜레이 최소화
+                    saved_path = await self.image_agent.run(enhanced_prompt, image_path)
+                    scene.image_path = str(saved_path)
             except Exception as e:
                 logger.error(f"❌ Failed to generate image for Scene {scene.scene_id}: {e}")
 
@@ -102,8 +135,8 @@ class VideoGenerationPipeline:
         logger.info("✅ Image generation completed.")
 
     async def _generate_audio(self, script: Script, output_dir: Path, options: dict = None):
-        """오디오(TTS) 생성 - 병렬 처리"""
-        logger.info("🔊 Step 3: Generating Audio (Parallel)...")
+        """오디오(TTS) 생성 - 병렬 처리 (Semaphore 적용)"""
+        logger.info("🔊 Step 3: Generating Audio (Parallel with Rate Limiting)...")
         audio_dir = output_dir / "3_audio"
         audio_dir.mkdir(exist_ok=True)
         options = options or {}
@@ -114,14 +147,18 @@ class VideoGenerationPipeline:
                 return
             
             audio_path = audio_dir / f"scene_{scene.scene_id:03d}.wav"
-            if audio_path.exists():
+            if await is_valid_media(audio_path):
                 scene.audio_path = str(audio_path)
                 return
+            elif audio_path.exists():
+                logger.warning(f"⚠️ Corrupted audio found for Scene {scene.scene_id}. Regenerating...")
+                audio_path.unlink()
 
             try:
-                await asyncio.sleep(scene.scene_id * 0.2)
-                saved_path = await self.audio_agent.run(narration, audio_path)
-                scene.audio_path = str(saved_path)
+                async with self.audio_sem:
+                    await asyncio.sleep(0.2)
+                    saved_path = await self.audio_agent.run(narration, audio_path)
+                    scene.audio_path = str(saved_path)
             except Exception as e:
                 logger.error(f"❌ Failed to generate audio for Scene {scene.scene_id}: {e}")
 
@@ -138,7 +175,7 @@ class VideoGenerationPipeline:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         duration = 5.0
-        if audio_path and audio_path.exists():
+        if audio_path and await is_valid_media(audio_path):
             duration = await get_media_duration(audio_path)
             duration += 0.5
             
@@ -183,7 +220,7 @@ class VideoGenerationPipeline:
         return output_path
 
     async def _generate_videos(self, script: Script, output_dir: Path, options: dict = None):
-        """비디오 생성 (Veo 또는 비동기 FFmpeg) - 병렬 처리"""
+        """비디오 생성 (Veo 또는 비동기 FFmpeg) - 병렬 처리 (Semaphore 적용)"""
         logger.info(f"🎥 Step 4: Generating Videos (Strategy: {settings.VEO_STRATEGY})...")
         videos_dir = output_dir / "4_videos"
         videos_dir.mkdir(exist_ok=True)
@@ -193,16 +230,20 @@ class VideoGenerationPipeline:
         custom = vid_opts.get("custom", "")
         
         async def process_scene(scene):
-            if not scene.image_path or not Path(scene.image_path).exists():
+            if not scene.image_path or not is_valid_image(Path(scene.image_path)):
+                logger.warning(f"⚠️ Valid image not found for Scene {scene.scene_id}, skipping video.")
                 return
                 
             video_path = videos_dir / f"scene_{scene.scene_id:03d}.mp4"
-            if video_path.exists():
+            if await is_valid_media(video_path):
                 scene.video_path = str(video_path)
                 return
+            elif video_path.exists():
+                logger.warning(f"⚠️ Corrupted video found for Scene {scene.scene_id}. Regenerating...")
+                video_path.unlink()
             
             audio_path = Path(output_dir / "3_audio" / f"scene_{scene.scene_id:03d}.wav")
-            if not audio_path.exists():
+            if not await is_valid_media(audio_path):
                 audio_path = None
             
             try:
@@ -214,10 +255,8 @@ class VideoGenerationPipeline:
                         use_veo = True
                 
                 if use_veo:
-                    # 업계 표준: 시간적 일관성 및 플리커 방지 프롬프트 주입
-                    base_prompt = scene.visual.description
                     enhanced_prompt = (
-                        f"{base_prompt}. Camera Motion: {camera}. "
+                        f"{scene.visual.description}. Camera Motion: {camera}. "
                         f"CRITICAL: Ensure perfect temporal consistency, zero inter-frame flicker, and highly stable lighting. "
                         f"Subjects must not drift, morph, or deform over time. Maintain rigid anatomical and physical structure."
                     )
@@ -225,12 +264,13 @@ class VideoGenerationPipeline:
                         enhanced_prompt += f" Extra instructions: {custom}"
 
                     logger.info(f"   Generating AI video (Veo) for Scene {scene.scene_id}")
-                    await asyncio.sleep(scene.scene_id * 5) 
-                    saved_path = await self.video_agent.run(
-                        prompt=enhanced_prompt,
-                        image_path=Path(scene.image_path),
-                        output_path=video_path
-                    )
+                    # 세마포어로 동시성 제어 (Veo는 엄격하게 제한)
+                    async with self.video_sem:
+                        saved_path = await self.video_agent.run(
+                            prompt=enhanced_prompt,
+                            image_path=Path(scene.image_path),
+                            output_path=video_path
+                        )
                 else:
                     logger.info(f"   Creating static video for Scene {scene.scene_id}")
                     saved_path = await self._create_static_video(
