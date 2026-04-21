@@ -77,12 +77,15 @@ class VideoGenerationPipeline:
                 scene.image_path = str(image_path)
                 return
 
-            # GUI 옵션과 자연어 지침을 결합한 정교한 프롬프팅
+            # 업계 표준: 일관성 및 물리법칙 강제 프롬프트
             base_prompt = scene.visual.description
-            enhanced_prompt = f"{base_prompt}. Style: {style}, Color Palette: {color}."
+            enhanced_prompt = (
+                f"{base_prompt}. Style: {style}, Color Palette: {color}. "
+                f"High quality, 4k resolution. "
+                f"CRITICAL: Maintain realistic physics and strict anatomical correctness. Do not generate morphed or structurally impossible objects. "
+            )
             if custom:
                 enhanced_prompt += f" Additional instructions: {custom}"
-            enhanced_prompt += " High quality, 4k resolution."
 
             try:
                 await asyncio.sleep(scene.scene_id * 0.5)
@@ -208,8 +211,13 @@ class VideoGenerationPipeline:
                         use_veo = True
                 
                 if use_veo:
+                    # 업계 표준: 시간적 일관성 및 플리커 방지 프롬프트 주입
                     base_prompt = scene.visual.description
-                    enhanced_prompt = f"{base_prompt}. Camera Motion: {camera}."
+                    enhanced_prompt = (
+                        f"{base_prompt}. Camera Motion: {camera}. "
+                        f"CRITICAL: Ensure perfect temporal consistency, zero inter-frame flicker, and highly stable lighting. "
+                        f"Subjects must not drift, morph, or deform over time. Maintain rigid anatomical and physical structure."
+                    )
                     if custom:
                         enhanced_prompt += f" Extra instructions: {custom}"
 
@@ -275,7 +283,7 @@ class VideoGenerationPipeline:
             logger.warning("⚠️ 조립할 수 있는 완전한 씬이 없습니다.")
             return
         
-        # 씬 병합 (비동기)
+        # 씬 병합 (비동기) + Audio Fade 처리 (Harsh Cuts 방지)
         merged_files = []
         for scene_data in available_scenes:
             scene_id = scene_data["scene_id"]
@@ -284,12 +292,19 @@ class VideoGenerationPipeline:
                 merged_files.append(merged_path)
                 continue
 
+            duration = scene_data['audio_duration']
+            fade_out_start = duration - 0.2 if duration > 0.4 else duration
+
+            # Audio fade in/out 필터 적용 (틱 노이즈 방지 및 부드러운 연결)
+            audio_filter = f"afade=t=in:ss=0:d=0.1,afade=t=out:st={fade_out_start}:d=0.2"
+
             cmd = [
                 "ffmpeg", "-y", "-stream_loop", "-1",
                 "-i", str(scene_data["video"]), "-i", str(scene_data["audio"]),
+                "-filter_complex", f"[1:a]{audio_filter}[a]",
+                "-map", "0:v:0", "-map", "[a]",
                 "-c:v", "libx264", "-c:a", "aac",
-                "-map", "0:v:0", "-map", "1:a:0",
-                "-t", f"{scene_data['audio_duration']:.2f}", "-shortest", str(merged_path)
+                "-t", f"{duration:.2f}", "-shortest", str(merged_path)
             ]
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -305,6 +320,7 @@ class VideoGenerationPipeline:
         with open(concat_list_path, "w", encoding="utf-8") as f:
             for merged_file in merged_files:
                 f.write(f"file '{merged_file.name}'\n")
+
         
         # 1차 조립 (비동기)
         raw_output = temp_dir / "raw_video.mp4"
