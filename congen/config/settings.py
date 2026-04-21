@@ -34,11 +34,19 @@ class Settings(BaseSettings):
         "Veo 3.1 Fast (Low latency)": "veo-3.1-fast-generate-preview",
         "Veo 3.1 Lite (Lowest cost)": "veo-3.1-lite-generate-preview",
     }
+    
+    AUDIO_MODELS: dict = {
+        "Lyria 3 Pro (High fidelity Music)": "lyria-3-pro-preview",
+        "Gemini 3.1 TTS (Expressive Voice)": "gemini-3.1-flash-tts-preview",
+        "Gemini 2.5 Flash TTS (Legacy)": "gemini-2.5-flash-preview-tts",
+    }
 
     # --- Active Model IDs ---
     MODEL_GEMINI_PRO: str = "gemini-3.1-pro-preview"
     MODEL_IMAGEN: str = "imagen-4.0-ultra-generate-001"
     MODEL_VEO: str = "veo-3.1-generate-preview"
+    MODEL_MUSIC: str = "lyria-3-pro-preview"
+    MODEL_TTS: str = "gemini-3.1-flash-tts-preview"
     
     # --- Paths ---
     BASE_DIR: Path = BASE_DIR

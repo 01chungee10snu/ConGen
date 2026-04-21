@@ -11,6 +11,7 @@ from congen.agents.script_generator import ScriptGeneratorAgent
 from congen.agents.image_generator import ImageGeneratorAgent
 from congen.agents.video_generator import VideoGeneratorAgent
 from congen.agents.audio_generator import AudioGeneratorAgent
+from congen.agents.music_generator import MusicGeneratorAgent
 from congen.models.script import Script
 from congen.config.settings import settings
 
@@ -35,13 +36,6 @@ def get_media_duration(file_path: Path) -> float:
 class VideoGenerationPipeline:
     """
     교육 영상 제작을 위한 전체 파이프라인 관리자
-    
-    파이프라인 단계:
-    1. 스크립트 생성 (Gemini)
-    2. 이미지 생성 (Nano Banana Pro)
-    3. 오디오 생성 (ElevenLabs)
-    4. 비디오 생성 (Veo 3.1)
-    5. 최종 조립 (FFmpeg)
     """
     
     def __init__(self):
@@ -49,6 +43,7 @@ class VideoGenerationPipeline:
         self.image_agent = ImageGeneratorAgent()
         self.video_agent = VideoGeneratorAgent()
         self.audio_agent = AudioGeneratorAgent()
+        self.music_agent = MusicGeneratorAgent()
         
     def _create_output_dir(self, topic: str) -> Path:
         """타임스탬프 기반 출력 디렉토리 생성"""
@@ -319,26 +314,61 @@ class VideoGenerationPipeline:
             for merged_file in merged_files:
                 f.write(f"file '{merged_file.name}'\n")
         
-        # 최종 출력
-        final_output = output_dir / "final_video.mp4"
-        cmd = [
+        # 1차 조립 (영상 + TTS)
+        raw_output = temp_dir / "raw_video.mp4"
+        cmd_concat = [
             "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_list_path),
             "-c", "copy",
-            str(final_output)
+            str(raw_output)
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(temp_dir))
+        result_concat = subprocess.run(cmd_concat, capture_output=True, text=True, cwd=str(temp_dir))
+        if result_concat.returncode != 0:
+            logger.error(f"❌ Concat failed: {result_concat.stderr}")
+            return
+            
+        total_duration = get_media_duration(raw_output)
         
-        if result.returncode == 0:
-            duration = get_media_duration(final_output)
-            size_mb = final_output.stat().st_size / 1024 / 1024
-            logger.info(f"✅ Final video created: {final_output}")
-            logger.info(f"   Duration: {duration:.1f}s, Size: {size_mb:.2f} MB")
-        else:
-            logger.error(f"❌ Final assembly failed: {result.stderr}")
+        # BGM 생성 및 믹싱 (옵션)
+        final_output = output_dir / "final_video.mp4"
+        bgm_prompt = "Soft, engaging, instrumental background music for an educational video, neutral tone"
+        bgm_path = temp_dir / "bgm.wav"
+        
+        try:
+            logger.info("🎵 Generating BGM (Lyria)...")
+            await self.music_agent.run(bgm_prompt, int(total_duration) + 1, bgm_path)
+            
+            # 오디오 믹싱 (TTS 볼륨 유지, BGM 볼륨 감소)
+            logger.info("🎛️ Mixing BGM with video...")
+            cmd_mix = [
+                "ffmpeg", "-y",
+                "-i", str(raw_output),
+                "-i", str(bgm_path),
+                "-filter_complex", "[0:a]volume=1.0[a0];[1:a]volume=0.3[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[a]",
+                "-map", "0:v",
+                "-map", "[a]",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                str(final_output)
+            ]
+            result_mix = subprocess.run(cmd_mix, capture_output=True, text=True)
+            if result_mix.returncode != 0:
+                logger.error(f"❌ Audio mix failed: {result_mix.stderr}")
+                # 믹싱 실패 시 원본 복사
+                import shutil
+                shutil.copy(raw_output, final_output)
+        except Exception as e:
+            logger.error(f"⚠️ BGM Generation skipped/failed: {e}")
+            import shutil
+            shutil.copy(raw_output, final_output)
+        
+        duration = get_media_duration(final_output)
+        size_mb = final_output.stat().st_size / 1024 / 1024
+        logger.info(f"✅ Final video created: {final_output}")
+        logger.info(f"   Duration: {duration:.1f}s, Size: {size_mb:.2f} MB")
 
     async def run(self, topic: str, output_dir: Optional[Path] = None) -> Path:
         """

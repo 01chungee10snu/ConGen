@@ -39,9 +39,6 @@ class AudioGeneratorAgent(BaseAgent):
             raise ValueError("GOOGLE_API_KEY is not set")
         
         self.client = genai.Client(api_key=api_key)
-        self.model_name = "gemini-2.5-flash-preview-tts"
-        
-        logger.info(f"AudioGeneratorAgent initialized with model: {self.model_name}")
         
     async def run(self, text: str, output_path: Path) -> str:
         """
@@ -54,7 +51,8 @@ class AudioGeneratorAgent(BaseAgent):
         Returns:
             저장된 파일 경로
         """
-        logger.info(f"Generating audio for text: {text[:50]}...")
+        model_name = settings.MODEL_TTS
+        logger.info(f"Generating audio ({model_name}) for text: {text[:50]}...")
         
         try:
             # 출력 디렉토리 생성
@@ -63,6 +61,7 @@ class AudioGeneratorAgent(BaseAgent):
             # Gemini TTS API 호출 (동기 함수를 비동기로 래핑)
             pcm_data = await asyncio.to_thread(
                 self._generate_speech,
+                model_name,
                 text
             )
             
@@ -77,11 +76,11 @@ class AudioGeneratorAgent(BaseAgent):
             logger.error(f"Audio generation failed: {e}")
             raise
     
-    def _generate_speech(self, text: str) -> bytes:
+    def _generate_speech(self, model_name: str, text: str) -> bytes:
         """Gemini TTS API 호출"""
         # 한국어 TTS 설정
         response = self.client.models.generate_content(
-            model=self.model_name,
+            model=model_name,
             contents=text,
             config=types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
