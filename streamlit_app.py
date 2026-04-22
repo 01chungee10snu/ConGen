@@ -19,95 +19,147 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 전문적인 모노톤 픽셀 아트 CSS 주입 ---
+# --- 전문적인 라이트 테마 및 Pretendard 폰트 CSS 주입 ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Silkscreen:wght@400;700&display=swap');
+    /* Pretendard 폰트 임포트 */
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
     /* 전체 배경 및 폰트 설정 */
     .stApp {
-        background-color: #121212;
-        color: #E0E0E0;
-        font-family: 'Monospace', 'Courier New', Courier, monospace;
+        background-color: #FFFFFF;
+        color: #111111;
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
     }
 
     /* 헤더 및 타이틀 */
-    h1, h2, h3 {
-        font-family: 'Silkscreen', cursive !important;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        color: #FFFFFF !important;
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Pretendard', sans-serif !important;
+        font-weight: 700;
+        color: #111111 !important;
+        letter-spacing: -0.5px;
     }
 
-    /* 픽셀 테두리 컨테이너 */
+    /* 카드 및 컨테이너 스타일 */
     div[data-testid="stVerticalBlock"] > div[style*="border"] {
-        border: 4px solid #444444 !important;
-        background-color: #1A1A1A !important;
-        box-shadow: 4px 4px 0px #000000;
-        padding: 20px !important;
-        image-rendering: pixelated;
+        border: 1px solid #E5E7EB !important;
+        background-color: #F9FAFB !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        padding: 24px !important;
     }
 
-    /* 버튼 스타일 (픽셀 스타일) */
+    /* 버튼 스타일 */
     .stButton > button {
-        font-family: 'Silkscreen', cursive !important;
-        background-color: #333333 !important;
-        color: #FFFFFF !important;
-        border: 4px solid #555555 !important;
-        border-radius: 0px !important;
-        box-shadow: 4px 4px 0px #000000 !important;
-        transition: all 0.1s;
+        font-family: 'Pretendard', sans-serif !important;
+        font-weight: 600;
+        background-color: #FFFFFF !important;
+        color: #374151 !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+        transition: all 0.2s;
     }
 
     .stButton > button:hover {
-        background-color: #555555 !important;
-        transform: translate(-2px, -2px);
-        box-shadow: 6px 6px 0px #000000 !important;
+        background-color: #F3F4F6 !important;
+        border-color: #9CA3AF !important;
     }
 
-    .stButton > button:active {
-        transform: translate(2px, 2px);
-        box-shadow: 0px 0px 0px #000000 !important;
+    /* Primary 버튼 스타일 (주요 액션) */
+    button[kind="primary"] {
+        background-color: #2563EB !important;
+        color: #FFFFFF !important;
+        border: 1px solid #1D4ED8 !important;
+    }
+    
+    button[kind="primary"]:hover {
+        background-color: #1D4ED8 !important;
+        border-color: #1E3A8A !important;
     }
 
     /* 사이드바 스타일 */
     [data-testid="stSidebar"] {
-        background-color: #0A0A0A !important;
-        border-right: 4px solid #333333;
+        background-color: #F3F4F6 !important;
+        border-right: 1px solid #E5E7EB;
+    }
+    
+    [data-testid="stSidebar"] .css-17lntkn { /* 사이드바 텍스트 색상 */
+        color: #374151;
     }
 
     /* 입력창 스타일 */
-    .stTextArea textarea, .stTextInput input {
-        background-color: #1A1A1A !important;
-        color: #00FF41 !important; /* 매트릭스 느낌의 강조색 (선택적) */
-        border: 2px solid #444444 !important;
-        font-family: 'DotGothic16', sans-serif !important;
-    }
-
-    /* 진행 바 */
-    .stProgress > div > div > div > div {
-        background-color: #E0E0E0 !important;
-        border-radius: 0px !important;
-    }
-
-    /* 스캔라인 효과 (배경) */
-    .stApp::before {
-        content: " ";
-        display: block;
-        position: absolute;
-        top: 0; left: 0; bottom: 0; right: 0;
-        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-        z-index: 2;
-        background-size: 100% 2px, 3px 100%;
-        pointer-events: none;
+    .stTextArea textarea, .stTextInput input, .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 6px !important;
+        font-family: 'Pretendard', sans-serif !important;
     }
     
-    /* 카드 가독성 개선 */
-    .stAlert {
-        border-radius: 0px !important;
-        border: 2px solid #444444 !important;
-        background-color: #222222 !important;
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: #2563EB !important;
+        box-shadow: 0 0 0 1px #2563EB !important;
     }
+
+    /* 캡션 및 작은 텍스트 */
+    .stCaption, small {
+        color: #6B7280 !important;
+    }
+
+    /* Alert 및 Info 박스 */
+    .stAlert {
+        border-radius: 8px !important;
+        border: 1px solid #E5E7EB !important;
+    }
+    
+    /* 텍스트 영역 라벨 색상 (예: "내레이션", "이미지 묘사") */
+    label {
+        color: #374151 !important;
+        font-weight: 600 !important;
+    }
+
+    /* 타임라인 커스텀 CSS (라이트 테마에 맞게 조정) */
+    .timeline-container {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 20px;
+        gap: 15px;
+    }
+    .scene-card {
+        min-width: 300px;
+        background-color: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 20px;
+        flex: 0 0 auto;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    .scene-card h4 {
+        color: #111111;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    .layer-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 0.9em;
+        color: #374151;
+    }
+    .layer-icon {
+        width: 30px;
+        text-align: center;
+        margin-right: 10px;
+    }
+    .status-dot {
+        height: 10px;
+        width: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    .status-done { background-color: #10B981; } /* Green */
+    .status-wait { background-color: #D1D5DB; } /* Gray */
     </style>
     """, unsafe_allow_html=True)
 
